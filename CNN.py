@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 from torch.optim.lr_scheduler import StepLR
 from load_moonboard import load_moonboard
-from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
+
 
 # pretrain resnet18
 
@@ -106,7 +107,14 @@ for lr in params_grid['lr']:
 
                         if not (step + 1) % print_interval:
                             print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
+                        losses.append(loss.item())
                         step += 1
+
+                plt.plot(losses)
+                plt.xlabel('Step')
+                plt.ylabel('Loss')
+                plt.title('Training Loss')
+                plt.show()
 
                 model.eval()
                 conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
@@ -141,4 +149,3 @@ print('Best hyperparameters:', best_params)
 print(conf_matrix)
 acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
 print('\nTest Accuracy: {} %'.format(acc * 100))
-
