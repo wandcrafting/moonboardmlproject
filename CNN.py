@@ -43,7 +43,6 @@ test_dataset = TensorDataset(tensor_test, tensor_test_labs)
 
 # Define the grid search parameters
 params_grid = {
-    'lr': [0.01, 0.001, 0.0001],
     'momentum': [0.9, 0.95, 0.99],
     'num_epochs': [10, 20, 30],
     'batch_size': [100, 500, 1000]
@@ -54,96 +53,94 @@ loss_func = nn.CrossEntropyLoss()
 
 # Perform the grid search
 best_acc = 0
-for lr in params_grid['lr']:
-    for momentum in params_grid['momentum']:
-        for num_epochs in params_grid['num_epochs']:
-            for batch_size in params_grid['batch_size']:
-                train_loader = DataLoader(train_dataset, batch_size=batch_size)
-                test_loader = DataLoader(test_dataset, batch_size=batch_size)
+for momentum in params_grid['momentum']:
+    for num_epochs in params_grid['num_epochs']:
+        for batch_size in params_grid['batch_size']:
+            train_loader = DataLoader(train_dataset, batch_size=batch_size)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
-                # Specify NN
-                model = nn.Sequential(
-                    nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-                    nn.Dropout2d(p=0.1),
-                    nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-                    nn.Dropout2d(p=0.2),
-                    nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-                    nn.Dropout2d(p=0.3),
-                    nn.Flatten(),
-                    nn.Linear(64, 2048), nn.ReLU(inplace=True),
-                    nn.Dropout(p=0.5),
-                    nn.Linear(2048, num_classes)
-                )
-                model.to(device)
+            # Specify NN
+            model = nn.Sequential(
+                nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                nn.Dropout2d(p=0.1),
+                nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                nn.Dropout2d(p=0.2),
+                nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                nn.Dropout2d(p=0.3),
+                nn.Flatten(),
+                nn.Linear(64, 2048), nn.ReLU(inplace=True),
+                nn.Dropout(p=0.5),
+                nn.Linear(2048, num_classes)
+            )
+            model.to(device)
 
-                # Define optimizer and loss function
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
-                scheduler = StepLR(optimizer, step_size=5, gamma=0.1)
-                
-                ### Train NN ###
-                step = 0
-                losses = []
-                model.train()
-                for epoch in range(num_epochs):
-                    scheduler.step()
-                    for data, targets in train_loader:
-                        data = data.to(device)
-                        targets = targets.to(device)
+            # Define optimizer and loss function
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+            scheduler = StepLR(optimizer, step_size=5, gamma=0.1)
+            
+            ### Train NN ###
+            step = 0
+            losses = []
+            model.train()
+            for epoch in range(num_epochs):
+                scheduler.step()
+                for data, targets in train_loader:
+                    data = data.to(device)
+                    targets = targets.to(device)
 
-                        optimizer.zero_grad()
+                    optimizer.zero_grad()
 
-                        logits = model(data)
+                    logits = model(data)
 
-                        loss = loss_func(logits, targets)
+                    loss = loss_func(logits, targets)
 
-                        # L2 regularization
-                        l2_reg = torch.tensor(0.).to(device)
-                        for param in model.parameters():
-                            l2_reg += torch.norm(param)
-                        loss += 1e-5 * l2_reg
+                    # L2 regularization
+                    l2_reg = torch.tensor(0.).to(device)
+                    for param in model.parameters():
+                        l2_reg += torch.norm(param)
+                    loss += 1e-5 * l2_reg
 
-                        loss.backward()
-                        optimizer.step()
+                    loss.backward()
+                    optimizer.step()
 
-                        if not (step + 1) % print_interval:
-                            print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
-                        losses.append(loss.item())
-                        step += 1
+                    if not (step + 1) % print_interval:
+                        print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
+                    losses.append(loss.item())
+                    step += 1
 
-                plt.plot(losses)
-                plt.xlabel('Step')
-                plt.ylabel('Loss')
-                plt.title('Training Loss')
-                plt.show()
+            # plt.plot(losses)
+            # plt.xlabel('Step')
+            # plt.ylabel('Loss')
+            # plt.title('Training Loss')
+            # plt.show()
 
-                model.eval()
-                conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
-                with torch.no_grad():
-                    for data, targets in test_loader:
-                        data = data.to(device)
-                        targets = targets.to(device)
-                        logits = model(data)
-                        pred_classes = torch.argmax(logits, dim=1)
+            model.eval()
+            conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
+            with torch.no_grad():
+                for data, targets in test_loader:
+                    data = data.to(device)
+                    targets = targets.to(device)
+                    logits = model(data)
+                    pred_classes = torch.argmax(logits, dim=1)
 
-                        classes = np.sort(np.unique(targets.cpu()))
-                        for i in range(len(pred_classes)):
-                            target = np.array(targets[i].cpu(), dtype=np.int64)
-                            pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
+                    classes = np.sort(np.unique(targets.cpu()))
+                    for i in range(len(pred_classes)):
+                        target = np.array(targets[i].cpu(), dtype=np.int64)
+                        pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
 
-                            row = np.where(classes == target)
-                            col = np.where(classes == pred)
+                        row = np.where(classes == target)
+                        col = np.where(classes == pred)
 
-                            conf_matrix[row, col] += 1
+                        conf_matrix[row, col] += 1
 
-                acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
-                if acc > best_acc:
-                    best_acc = acc
-                    best_params = {
-                        'lr': lr,
-                        'momentum': momentum,
-                        'num_epochs': num_epochs,
-                        'batch_size': batch_size
-                    }
+            acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
+            if acc > best_acc:
+                best_acc = acc
+                best_params = {
+                    'momentum': momentum,
+                    'num_epochs': num_epochs,
+                    'batch_size': batch_size
+                }
 
 print('Best hyperparameters:', best_params)
 print(conf_matrix)
