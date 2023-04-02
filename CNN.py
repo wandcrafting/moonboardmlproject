@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
+from torch.optim.lr_scheduler import StepLR
 from load_moonboard import load_moonboard
+from torch.utils.tensorboard import SummaryWriter
 
 # pretrain resnet18
 
@@ -38,20 +40,6 @@ tensor_test_labs = torch.tensor(test_labs)
 train_dataset = TensorDataset(tensor_train, tensor_train_labs)
 test_dataset = TensorDataset(tensor_test, tensor_test_labs)
 
-# Define NN
-model = nn.Sequential(
-    nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Flatten(),
-    nn.Linear(64, 2048), nn.ReLU(inplace=True),
-    nn.Linear(2048, num_classes)
-)
-model.to(device)
-
-# Define optimizer and loss function
-loss_func = nn.CrossEntropyLoss()
-
 # Define the grid search parameters
 params_grid = {
     'lr': [0.01, 0.001, 0.0001],
@@ -59,6 +47,9 @@ params_grid = {
     'num_epochs': [10, 20, 30],
     'batch_size': [100, 500, 1000]
 }
+
+# Define optimizer and loss function
+loss_func = nn.CrossEntropyLoss()
 
 # Perform the grid search
 best_acc = 0
@@ -72,24 +63,28 @@ for lr in params_grid['lr']:
                 # Specify NN
                 model = nn.Sequential(
                     nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Dropout2d(p=0.1),
                     nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Dropout2d(p=0.2),
                     nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Dropout2d(p=0.3),
                     nn.Flatten(),
                     nn.Linear(64, 2048), nn.ReLU(inplace=True),
+                    nn.Dropout(p=0.5),
                     nn.Linear(2048, num_classes)
                 )
-
                 model.to(device)
 
                 # Define optimizer and loss function
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-                loss_func = nn.CrossEntropyLoss()
-
+                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
+                scheduler = StepLR(optimizer, step_size=5, gamma=0.1)
+                
                 ### Train NN ###
                 step = 0
                 losses = []
                 model.train()
                 for epoch in range(num_epochs):
+                    scheduler.step()
                     for data, targets in train_loader:
                         data = data.to(device)
                         targets = targets.to(device)
@@ -100,12 +95,17 @@ for lr in params_grid['lr']:
 
                         loss = loss_func(logits, targets)
 
+                        # L2 regularization
+                        l2_reg = torch.tensor(0.).to(device)
+                        for param in model.parameters():
+                            l2_reg += torch.norm(param)
+                        loss += 1e-5 * l2_reg
+
                         loss.backward()
                         optimizer.step()
 
                         if not (step + 1) % print_interval:
                             print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
-
                         step += 1
 
                 model.eval()
