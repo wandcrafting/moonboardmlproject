@@ -4,17 +4,18 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 from load_moonboard import load_moonboard
+import matplotlib.pyplot as plt
 
 # pretrain resnet18
 
-grades = [4, 7, 10]
+grades = [4,5, 6, 7, 8, 9, 10]
 batch_size = 1000
 
 root = 'data'
 device = 'cpu'
 lr = 0.001
 momentum = 0.9
-num_epochs = 100
+num_epochs = 200
 print_interval = 50
 num_classes = len(grades)
 
@@ -87,11 +88,56 @@ model.to(device)  # moves model to specified device
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_func = nn.CrossEntropyLoss()
 
+def evaluation():
+    # Compute test set predictions, confusion matrix
+    model.eval()
+    conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
+    with torch.no_grad():
+        for data, targets in test_loader:
+            # Make sure data is on the same device as the model
+            data = data.to(device)
+            targets = targets.to(device)
+
+            # Run forward pass
+            logits = model(data)
+
+            #calculate loss, append it to test loss array for graphing
+            loss = loss_func(logits, targets)
+            test_loss_stored.append(loss.item())
+
+            # Get class predictions
+            pred_classes = torch.argmax(logits, dim=1)
+
+            classes = np.sort(np.unique(targets.cpu()))
+
+            # Update confusion matrix
+            for i in range(len(pred_classes)):
+                target = np.array(targets[i].cpu(), dtype=np.int64)
+                pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
+
+                row = np.where(classes == target)
+                col = np.where(classes == pred)
+
+                conf_matrix[row, col] += 1
+
+    print(conf_matrix)
+    acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
+    test_acc_arr.append(acc*100)
+    print('Test Accuracy of the model on the {} test samples: {} %'.format(len(test_loader.dataset), acc * 100))
+
+#Initialise storage variables for graphing purposes
+logits_stored = []
+training_loss_stored = []
+test_loss_stored = []
+test_acc_arr = []
+training_acc_arr = []
+
 ### Train NN ###
 step = 0  # track how many training iterations we've been through
 losses = []  # will be used to store loss values at each iteration
 model.train()  # sets model to training mode
 for epoch in range(num_epochs):
+    conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
     for data, targets in train_loader:
         # Move data and targets to the same device as the model
         data = data.to(device)
@@ -110,38 +156,83 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
+        #Get class predictions
+        pred_classes = torch.argmax(logits, dim=1)
+
+        #update confusion matrix
+        for target, logits in zip(targets, pred_classes):
+          conf_matrix[target, logits] += 1
+
+        #compute training accuracy
+        training_acc_arr.append(np.diag(conf_matrix).sum()/conf_matrix.sum())
+        #store and print training loss
+        losses.append(loss.item())
+
         if not (step + 1) % print_interval:
             print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
 
         step += 1
+    
+    training_loss_stored.append(loss.item()*100)
+    evaluation()
 
-# Compute test set predictions, confusion matrix
-model.eval()
-conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
-with torch.no_grad():
-    for data, targets in test_loader:
-        # Make sure data is on the same device as the model
-        data = data.to(device)
-        targets = targets.to(device)
+# Training Accuracy Graph
+x = np.arange(0,num_epochs,step=1)
 
-        # Run forward pass
-        logits = model(data)
+y = []
+interval = len(training_acc_arr)/num_epochs
+print(interval)
+for i in range(num_epochs):
+  y.append(training_acc_arr[i*int(interval)]*100)
+plt.plot(x,y)
+plt.title("Training Accuracy VS epoch")
+plt.ylabel('training accuracy %')
+plt.xlabel('epoch')
+plt.grid(color='black', linestyle='-', linewidth=0.1)
 
-        # Get class predictions
-        pred_classes = torch.argmax(logits, dim=1)
+plt.show()
 
-        classes = np.sort(np.unique(targets.cpu()))
 
-        # Update confusion matrix
-        for i in range(len(pred_classes)):
-            target = np.array(targets[i].cpu(), dtype=np.int64)
-            pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
+# Training Loss Graph
+x = np.arange(0,num_epochs,step=1)
+y = training_loss_stored
 
-            row = np.where(classes == target)
-            col = np.where(classes == pred)
 
-            conf_matrix[row, col] += 1
+plt.plot(x,y)
+plt.title("Training Loss VS epoch")
+plt.ylabel('training loss %')
+plt.xlabel('epoch')
+plt.grid(color='black', linestyle='-', linewidth=0.1)
 
-print(conf_matrix)
-acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
-print('Test Accuracy of the model on the {} test samples: {} %'.format(len(test_loader.dataset), acc * 100))
+plt.show()
+
+# Test Loss Graph
+x = np.arange(0,num_epochs,step=1)
+
+y = []
+interval = len(test_loss_stored)/num_epochs
+print(interval)
+for i in range(num_epochs):
+  y.append(test_loss_stored[i*int(interval)]*100)
+
+plt.plot(x,y)
+plt.title("Test Loss VS epoch")
+plt.ylabel('test lost %')
+plt.xlabel('epoch')
+plt.grid(color='black', linestyle='-', linewidth=0.1)
+
+plt.show()
+
+# Test Accuracy Graph
+x = np.arange(0,num_epochs,step=1)
+y = test_acc_arr
+
+
+plt.plot(x,y)
+plt.title("Test Accuracy VS epoch")
+plt.ylabel('test accuracy %')
+plt.xlabel('epoch')
+plt.grid(color='black', linestyle='-', linewidth=0.1)
+
+plt.show()
+plt.figure()

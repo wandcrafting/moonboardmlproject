@@ -5,14 +5,6 @@ def load_moonboard(filename='moonboard.npz', grades = [4, 7], n_data=None):
     x_train, y_train = f['x_train'], f['y_train']
     x_test,  y_test  = f['x_test'],  f['y_test']
 
-    if n_data == None:
-        n_data = np.shape(x_test)[0]
-
-    x_train = x_train[0:n_data]
-    y_train = y_train[0:n_data]
-    x_test = x_test[0:n_data]
-    y_test = y_test[0:n_data]
-
     grades = np.array(grades)
 
     grade_in_train = np.isin(y_train, grades)
