@@ -1,6 +1,6 @@
 import numpy as np
 
-def load_moonboard(filename='moonboard.npz', grades = [4, 7], n_data=None):
+def load_moonboard(filename='moonboard.npz', grades = [4, 5, 6, 7, 8, 9, 10], n_data=None):
     f = np.load(filename)
     x_train, y_train = f['x_train'], f['y_train']
     x_test,  y_test  = f['x_test'],  f['y_test']
@@ -22,3 +22,8 @@ def load_moonboard(filename='moonboard.npz', grades = [4, 7], n_data=None):
         y_test[y_test == y_i] = i
 
     return (x_train, y_train), (x_test, y_test)
+
+(x_train, y_train), (x_test, y_test) = load_moonboard() 
+
+print(x_train.shape, y_train.shape, x_test.shape, y_test.shape)
+
