@@ -24,6 +24,8 @@ print_interval = 100
 x_train = np.expand_dims(x_train, axis=1)
 x_test = np.expand_dims(x_test, axis=1)
 
+print(load_moonboard(grades=grades)[0])
+
 # Create train and test datasets, data loaders, etc.
 
 tensor_train = torch.tensor(x_train)
