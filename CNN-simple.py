@@ -144,4 +144,4 @@ with torch.no_grad():
 
 print(conf_matrix)
 acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
-print('\nTest Accuracy: {} %'.format(acc * 100))
+print('Test Accuracy of the model on the {} test samples: {} %'.format(len(test_loader.dataset), acc * 100))

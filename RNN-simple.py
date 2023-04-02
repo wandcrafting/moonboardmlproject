@@ -12,10 +12,10 @@ batch_size = 1000
 
 root = 'data'
 device = 'cpu'
-lr = 0.01
+lr = 0.001
 momentum = 0.9
-num_epochs = 20
-print_interval = 100
+num_epochs = 100
+print_interval = 50
 num_classes = len(grades)
 
 
