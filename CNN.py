@@ -12,12 +12,8 @@ batch_size = 1000
 
 root = 'data'
 device = 'cpu'
-lr = 0.01
-momentum = 0.9
-num_epochs = 20
-print_interval = 100
 num_classes = len(grades)
-
+print_interval = 100
 
 # Load data into numpy array
 
@@ -39,16 +35,11 @@ test_labs = y_test
 test_labs = test_labs.astype(np.int64)
 tensor_test_labs = torch.tensor(test_labs)
 
-
 train_dataset = TensorDataset(tensor_train, tensor_train_labs)
 test_dataset = TensorDataset(tensor_test, tensor_test_labs)
-train_loader = DataLoader(train_dataset, batch_size=batch_size)
-test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
-
-
-# Specify NN
-model = nn.Sequential(  # Sequential models are models where the layers are applied sequentially, in order
+# Define NN
+model = nn.Sequential(
     nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
     nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
     nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
@@ -56,68 +47,98 @@ model = nn.Sequential(  # Sequential models are models where the layers are appl
     nn.Linear(64, 2048), nn.ReLU(inplace=True),
     nn.Linear(2048, num_classes)
 )
-
-model.to(device)  # moves model to specified device
+model.to(device)
 
 # Define optimizer and loss function
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 loss_func = nn.CrossEntropyLoss()
 
-### Train NN ###
-step = 0  # track how many training iterations we've been through
-losses = []  # will be used to store loss values at each iteration
-model.train()  # sets model to training mode
-for epoch in range(num_epochs):
-    for data, targets in train_loader:
-        # Move data and targets to the same device as the model
-        data = data.to(device)
-        targets = targets.to(device)
+# Define the grid search parameters
+params_grid = {
+    'lr': [0.01, 0.001, 0.0001],
+    'momentum': [0.9, 0.95, 0.99],
+    'num_epochs': [10, 20, 30],
+    'batch_size': [100, 500, 1000]
+}
 
-        # Zero-out gradients
-        optimizer.zero_grad()
+# Perform the grid search
+best_acc = 0
+for lr in params_grid['lr']:
+    for momentum in params_grid['momentum']:
+        for num_epochs in params_grid['num_epochs']:
+            for batch_size in params_grid['batch_size']:
+                train_loader = DataLoader(train_dataset, batch_size=batch_size)
+                test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
-        # Run forward pass
-        logits = model(data)
+                # Specify NN
+                model = nn.Sequential(
+                    nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
+                    nn.Flatten(),
+                    nn.Linear(64, 2048), nn.ReLU(inplace=True),
+                    nn.Linear(2048, num_classes)
+                )
 
-        # Compute loss
-        loss = loss_func(logits, targets)
+                model.to(device)
 
-        # Perform backpropagation and update model parameters
-        loss.backward()
-        optimizer.step()
+                # Define optimizer and loss function
+                optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                loss_func = nn.CrossEntropyLoss()
 
-        if not (step + 1) % print_interval:
-            print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
+                ### Train NN ###
+                step = 0
+                losses = []
+                model.train()
+                for epoch in range(num_epochs):
+                    for data, targets in train_loader:
+                        data = data.to(device)
+                        targets = targets.to(device)
 
-        step += 1
+                        optimizer.zero_grad()
 
-# Compute test set predictions, confusion matrix
-model.eval()
-conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
-with torch.no_grad():
-    for data, targets in test_loader:
-        # Make sure data is on the same device as the model
-        data = data.to(device)
-        targets = targets.to(device)
+                        logits = model(data)
 
-        # Run forward pass
-        logits = model(data)
+                        loss = loss_func(logits, targets)
 
-        # Get class predictions
-        pred_classes = torch.argmax(logits, dim=1)
+                        loss.backward()
+                        optimizer.step()
 
-        classes = np.sort(np.unique(targets.cpu()))
+                        if not (step + 1) % print_interval:
+                            print('[epoch: {}, step: {}, loss: {}]'.format(epoch, step, loss.item()))
 
-        # Update confusion matrix
-        for i in range(len(pred_classes)):
-            target = np.array(targets[i].cpu(), dtype=np.int64)
-            pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
+                        step += 1
 
-            row = np.where(classes == target)
-            col = np.where(classes == pred)
+                model.eval()
+                conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int32)
+                with torch.no_grad():
+                    for data, targets in test_loader:
+                        data = data.to(device)
+                        targets = targets.to(device)
+                        logits = model(data)
+                        pred_classes = torch.argmax(logits, dim=1)
 
-            conf_matrix[row, col] += 1
+                        classes = np.sort(np.unique(targets.cpu()))
+                        for i in range(len(pred_classes)):
+                            target = np.array(targets[i].cpu(), dtype=np.int64)
+                            pred = np.array(pred_classes[i].cpu(), dtype=np.int64)
 
+                            row = np.where(classes == target)
+                            col = np.where(classes == pred)
+
+                            conf_matrix[row, col] += 1
+
+                acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
+                if acc > best_acc:
+                    best_acc = acc
+                    best_params = {
+                        'lr': lr,
+                        'momentum': momentum,
+                        'num_epochs': num_epochs,
+                        'batch_size': batch_size
+                    }
+
+print('Best hyperparameters:', best_params)
 print(conf_matrix)
 acc = np.diag(conf_matrix).sum() / conf_matrix.sum()
 print('\nTest Accuracy: {} %'.format(acc * 100))
+
