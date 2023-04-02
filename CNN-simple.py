@@ -12,10 +12,10 @@ batch_size = 1000
 
 root = 'data'
 device = 'cpu'
-lr = 0.01
+lr = 0.001
 momentum = 0.9
-num_epochs = 20
-print_interval = 100
+num_epochs = 100
+print_interval = 50
 num_classes = len(grades)
 
 
@@ -45,17 +45,41 @@ test_dataset = TensorDataset(tensor_test, tensor_test_labs)
 train_loader = DataLoader(train_dataset, batch_size=batch_size)
 test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
+# Define the CNN model
+class Net(nn.Module):
+    def __init__(self, num_classes):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2)
+        self.relu2 = nn.ReLU(inplace=True)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=9, stride=1, padding=4)
+        self.relu3 = nn.ReLU(inplace=True)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(64, 2048)
+        self.relu4 = nn.ReLU(inplace=True)
+        self.fc2 = nn.Linear(2048, num_classes)
 
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.pool1(x)
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.pool2(x)
+        x = self.conv3(x)
+        x = self.relu3(x)
+        x = self.pool3(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        x = self.relu4(x)
+        x = self.fc2(x)
+        return x
 
 # Specify NN
-model = nn.Sequential(  # Sequential models are models where the layers are applied sequentially, in order
-    nn.Conv2d(1, 16, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Conv2d(16, 32, 5, padding=2), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Conv2d(32, 32, 9, padding=4), nn.ReLU(inplace=True), nn.MaxPool2d(2),
-    nn.Flatten(),
-    nn.Linear(64, 2048), nn.ReLU(inplace=True),
-    nn.Linear(2048, num_classes)
-)
+model = Net(num_classes=len(grades))
 
 model.to(device)  # moves model to specified device
 
